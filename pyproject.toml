@@ -1,0 +1,24 @@
+[project]
+name = "phoebe"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Daniel Furr", email = "danielcfurr@gmail.com"}
+]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+librosa = "*"
+tensorflow = "==2.16.1"
+imageio = { version = "^2.21", extras = ["ffmpeg"] }
+birdnetlib = "*"
+jupyterlab = "^4.4.0"
+pandas = "*"
+numpy = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
