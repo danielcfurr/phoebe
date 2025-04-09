@@ -15,9 +15,11 @@ librosa = "*"
 tensorflow = "==2.16.1"
 imageio = { version = "^2.21", extras = ["ffmpeg"] }
 birdnetlib = "*"
+pydub = "*"
 jupyterlab = "^4.4.0"
 pandas = "*"
 numpy = "*"
+GeoPy = "*"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
