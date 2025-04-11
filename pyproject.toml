@@ -22,6 +22,7 @@ jupyterlab = "^4.4.0"
 pandas = "*"
 numpy = "*"
 GeoPy = "*"
+streamlit = "^1.44.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
