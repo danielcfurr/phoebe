@@ -1,13 +1,4 @@
-"""
-Module for interacting with the Xeno-Canto API to retrieve and process bird recordings.
-
-This script performs the following tasks:
-1. Queries the Xeno-Canto API to determine which bird recordings are available based on specified search criteria.
-2. Selects a subset of these recordings to download or ensures that the necessary audio files are locally available.
-3. Analyzes the downloaded recordings, identifying the best window of interest within each file.
-"""
-
-import requests
+import json
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -15,39 +6,10 @@ from pydub import AudioSegment
 
 from birdnetlib import Recording
 from birdnetlib.analyzer import Analyzer
-from geopy.distance import distance
-
-from dotenv import load_dotenv
-import os
-
-load_dotenv()  # Loads variables from .env into environment
-API_KEY = os.getenv("XENOCANTO_API_KEY")
 
 BASE_DIR = Path(__file__).resolve().parent
 
-LATITUDE = 37
-LONGITUDE = -122
-RECORDINGS = 10
 SEGMENTS = 2
-
-QUERY = {
-    'len': '>12',
-    'q': 'A',
-    'type': 'song'
-}
-
-BIRDS = [
-    ('Sayornis nigricans', 'Black Phoebe'),
-    ('Passer domesticus', 'House Sparrow'),
-    ('Leiothlypis celata', 'Orange-crowned Warbler'),
-    ('Poecile rufescens', 'Chestnut-based Chickadee'),
-    ('Spinus psaltria', 'Lesser Goldfinch'),
-    ('Junco hyemalis', 'Dark-eyed Junco'),
-    ('Zonotrichia leucophrys', 'White-crowned Sparrow'),
-    ('Melozone crissalis', 'California Towhee'),
-    ('Setophaga townsendi', "Townsend's Warbler"),
-    ('Setophaga coronata', 'Yellow-rumped Warbler'),
-]
 
 
 def main():
@@ -55,82 +17,24 @@ def main():
     # May as well fail here first to avoid unproductive API calls
     analyzer = Analyzer()
 
-    # Get an API response for each species
-    manifest_holder = []
-    for latin, common in BIRDS:
-        print("Querying Xeno-Canto for", latin, 'aka', common)
-        manifest_holder.append(get_manifest_for_target(scientific_name=latin, query=QUERY))
+    with open(BASE_DIR / "data" / "manifest.json") as f:
+        manifest = json.load(f)
 
-    # Assemble the responses into a data frame
-    manifest = pd.concat(manifest_holder, axis=0)
-    Path("data").mkdir(exist_ok=True)
-    manifest.to_json(BASE_DIR / "data" / "manifest.json", orient="index", indent=2)
+    raw_data_dir = BASE_DIR / 'data' / 'processed'
+    for file in raw_data_dir.iterdir():
+        if file.is_file():
+            file.unlink()
 
-    # Download each "raw" .mp3 if not already present, select best window, and save to "processed"
-    for idx, row in manifest.iterrows():
-        file_in = BASE_DIR / row['local_raw']
-        file_out = BASE_DIR / row['local_processed']
-        print(f"Processing record {idx}, {file_in}, {file_out}")
-        present = download_if_absent(url=row['file'], filepath=file_in)
-        if present:
-            recording = analyze(analyzer, filepath=file_in, lat=row['lat'], lng=row['lon'], date=row['date'])
-            scientific_name = row['gen'] + ' ' + row['sp']
-            start, end, score = search_windows(recording, scientific_name=scientific_name, segments_per_window=SEGMENTS)
-            process_mp3(file_in, start_sec=start, end_sec=end, output_path=file_out)
+    for recoding_id, data in manifest.items():
+        file_in = BASE_DIR / data['local_raw']
+        file_out = BASE_DIR / data['local_processed']
+        print(f"Processing recording {recoding_id}, {file_in}, {file_out}")
 
+        recording = analyze(analyzer, filepath=file_in, lat=data['lat'], lng=data['lon'], date=data['date'])
 
-def get_manifest_for_target(scientific_name: str, per_page=500, query=None) -> pd.DataFrame:
-    """Get a dataframe of audio files for target bird from Xeno-Canto"""
-    base_url = "https://xeno-canto.org/api/3/recordings"
-
-    if query is None:
-        query = {}
-
-    query['sp'] = scientific_name
-
-    query_string = ' '.join([f'{key}:"{item}"' for key, item in query.items()])
-
-    response = requests.get(base_url, params={"query": query_string, "key": API_KEY, "per_page": per_page})
-
-    # Check for success
-    if response.status_code == 200:
-        data = response.json()
-    else:
-        print(f"Request failed with status code {response.status_code}")
-        return pd.DataFrame()
-
-    recordings = data.pop('recordings')
-    print(data)
-
-    if len(data):
-        df = pd.DataFrame(recordings).set_index('id')
-        df['km'] = df.apply(lambda row: distance((LATITUDE, LONGITUDE), (row['lat'], row['lon'])).km, axis=1)
-        # penalty = df['q'].map({'A': 0, 'B': 500, 'C': 1000}).fillna(2000)  # TODO: Kept as reminder, deleted later
-        # df['penalized_km'] = df['km'] + penalty
-        df['local_raw'] = 'data/raw/' + df.index + '.mp3'
-        df['local_processed'] = 'data/processed/' + df.index + '.mp3'
-        return df.sort_values('km').head(RECORDINGS)
-    else:
-        return pd.DataFrame(index=pd.Series(name='id'))
-
-
-def download_if_absent(url: str, filepath: str) -> bool:
-    """Download file if absent, returning True if successful or file already present"""
-    path = Path(filepath)
-    if path.exists():
-        return True
-
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        print(f"Failed download to {path}. Status code: {response.status_code}")
-        return False
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, 'wb') as f:
-        f.write(response.content)
-
-    return True
+        scientific_name = data['gen'] + ' ' + data['sp']
+        start, end, score = search_windows(recording, scientific_name=scientific_name, segments_per_window=SEGMENTS)
+        process_mp3(file_in, start_sec=start, end_sec=end, output_path=file_out)
 
 
 def analyze(analyzer: Analyzer, filepath: str, lat: float, lng: float, date: str) -> Recording:
