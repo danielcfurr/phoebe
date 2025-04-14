@@ -1,17 +1,7 @@
 from phoebe import BIRDS, RECORDS, ID_LOOKUP
 import streamlit as st
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import random
-
-def audio_widget(record_id, show_credit):
-    record = RECORDS[record_id]
-    audio_file = open("audio/" + record["local_processed"], "rb")
-    audio_bytes = audio_file.read()
-    st.audio(audio_bytes, format="audio/mp3")
-    if show_credit:
-        st.text(f"Recording by {record["rec"]} ({record["lic"]})")
-    else:
-        st.text(f"Recording by ??? (???)")
 
 
 def generate_item():
@@ -21,6 +11,38 @@ def generate_item():
     shuffled_id_list = random.sample(paired_id_list + odd_id_list, k=3)
     return shuffled_id_list, odd_id_list[0]
 
+
+def audio_widget(record_id):
+    record = RECORDS[record_id]
+    audio_file = open("audio/" + record["local_processed"], "rb")
+    audio_bytes = audio_file.read()
+    st.audio(audio_bytes, format="audio/mp3")
+
+
+def credit(record_id, reveal=True):
+    record = RECORDS[record_id]
+    if reveal:
+        lic_text, lic_number = PurePosixPath(record["lic"]).parts[-2:]
+        st.write(f"""
+            **{record['en']}** <br>
+            <span style="color:gray;">
+            [Recording]({record["url"]}): 
+            {record["rec"]} 
+            ([CC {lic_text} {lic_number}]({record["lic"]})) <br>
+            Photo: First Last (License) <br>
+            </span>
+        """, unsafe_allow_html=True)
+    else:
+        st.write("""
+            *Secret bird* <br>
+            <span style="color:gray;">
+            Recording: *???* <br>
+            Photo: *???* <br>
+            </span>
+        """, unsafe_allow_html=True)
+
+
+# Set up session state and some variables
 
 if "current_question" not in st.session_state:
     st.session_state.current_question = generate_item()
@@ -35,37 +57,43 @@ print(st.session_state)
 
 record_ids, correct_id = st.session_state.current_question
 
+
 # Layout starts here...
 
 st.title("Odd Bird Out")
 
-# Audio widgets
-for rid in record_ids:
-    audio_widget(rid, st.session_state.submitted)
+# Show each record vertically
+for i, rid in enumerate(record_ids):
+    with st.container():
+        button_col, audio_col, image_col = st.columns([.5, 4, 1])
 
-# --- Choices (disable after submit) ---
-selected = st.radio(
-    "Who is the odd bird?",
-    record_ids,
-    index=record_ids.index(st.session_state.selected) if st.session_state.selected else 0,
-    disabled=st.session_state.submitted
-)
-st.session_state.selected = selected
+        with button_col:
+            if st.session_state.submitted:
+                if rid == correct_id:
+                    st.button("✅", key=f"btn_{rid}")
+                elif rid == st.session_state.selected:
+                    st.button("❌", key=f"btn_{rid}")
+            elif st.button("ABC"[i], key=f"btn_{rid}"):
+                st.session_state.selected = rid
+                st.session_state.submitted = True
+                st.rerun()
 
-# --- Submit Button (disable after submit) ---
-submit_button = st.button("Submit", disabled=st.session_state.submitted)
+        with audio_col:
+            audio_widget(rid)
+            credit(rid, st.session_state.submitted)
 
-# Handle submission
-if submit_button and not st.session_state.submitted:
-    st.session_state.submitted = True
-    st.rerun()  # So the radio and submit button updates immediately as disabled
+        with image_col:
+            if st.session_state.submitted:
+                st.image("temp_bird.jpg", use_container_width=True)
+            else:
+                pass
 
 # --- Feedback ---
 if st.session_state.submitted:
     if st.session_state.selected == correct_id:
         st.success("✅ Correct!")
     else:
-        st.error(f"❌ Incorrect. The correct answer was **{correct_id}**.")
+        st.error(f"❌ Incorrect.")
 
 # --- Next Question Button ---
 if st.session_state.submitted and st.button("Next Question"):

@@ -23,6 +23,9 @@ pandas = "*"
 numpy = "*"
 GeoPy = "*"
 streamlit = "^1.44.1"
+scipy = "^1.15.2"
+noisereduce = "^3.0.3"
+ipywidgets = "^8.1.6"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

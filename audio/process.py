@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 LATITUDE = 37
 LONGITUDE = -122
 RECORDINGS = 10
-SEGMENTS = 4
+SEGMENTS = 2
 
 QUERY = {
     'len': '>12',
@@ -39,6 +39,14 @@ QUERY = {
 BIRDS = [
     ('Sayornis nigricans', 'Black Phoebe'),
     ('Passer domesticus', 'House Sparrow'),
+    ('Leiothlypis celata', 'Orange-crowned Warbler'),
+    ('Poecile rufescens', 'Chestnut-based Chickadee'),
+    ('Spinus psaltria', 'Lesser Goldfinch'),
+    ('Junco hyemalis', 'Dark-eyed Junco'),
+    ('Zonotrichia leucophrys', 'White-crowned Sparrow'),
+    ('Melozone crissalis', 'California Towhee'),
+    ('Setophaga townsendi', "Townsend's Warbler"),
+    ('Setophaga coronata', 'Yellow-rumped Warbler'),
 ]
 
 
@@ -66,7 +74,8 @@ def main():
         present = download_if_absent(url=row['file'], filepath=file_in)
         if present:
             recording = analyze(analyzer, filepath=file_in, lat=row['lat'], lng=row['lon'], date=row['date'])
-            start, end, score = search_windows(recording, target=row['en'], segments_per_window=SEGMENTS)
+            scientific_name = row['gen'] + ' ' + row['sp']
+            start, end, score = search_windows(recording, scientific_name=scientific_name, segments_per_window=SEGMENTS)
             process_mp3(file_in, start_sec=start, end_sec=end, output_path=file_out)
 
 
@@ -93,14 +102,16 @@ def get_manifest_for_target(scientific_name: str, per_page=500, query=None) -> p
     recordings = data.pop('recordings')
     print(data)
 
-    df = pd.DataFrame(recordings).set_index('id')
-    df['km'] = df.apply(lambda row: distance((LATITUDE, LONGITUDE), (row['lat'], row['lon'])).km, axis=1)
-    # penalty = df['q'].map({'A': 0, 'B': 500, 'C': 1000}).fillna(2000)  # TODO: Kept as reminder, deleted later
-    # df['penalized_km'] = df['km'] + penalty
-    df['local_raw'] = 'data/raw/' + df.index + '.mp3'
-    df['local_processed'] = 'data/processed/' + df.index + '.mp3'
-
-    return df.sort_values('km').head(RECORDINGS)
+    if len(data):
+        df = pd.DataFrame(recordings).set_index('id')
+        df['km'] = df.apply(lambda row: distance((LATITUDE, LONGITUDE), (row['lat'], row['lon'])).km, axis=1)
+        # penalty = df['q'].map({'A': 0, 'B': 500, 'C': 1000}).fillna(2000)  # TODO: Kept as reminder, deleted later
+        # df['penalized_km'] = df['km'] + penalty
+        df['local_raw'] = 'data/raw/' + df.index + '.mp3'
+        df['local_processed'] = 'data/processed/' + df.index + '.mp3'
+        return df.sort_values('km').head(RECORDINGS)
+    else:
+        return pd.DataFrame(index=pd.Series(name='id'))
 
 
 def download_if_absent(url: str, filepath: str) -> bool:
@@ -135,17 +146,22 @@ def analyze(analyzer: Analyzer, filepath: str, lat: float, lng: float, date: str
     return recording
 
 
-def search_windows(rec: Recording, target: str, segments_per_window) -> tuple:
+def search_windows(rec: Recording, scientific_name: str, segments_per_window) -> tuple:
     """Return the start time, end time, and score for the best window in a recording"""
-    detections = pd.DataFrame(rec.detections).set_index(['start_time', 'end_time'])
-    segment_seconds = detections.index[0][1]
+    detections = pd.DataFrame(rec.detections)
 
-    segment_scores = []
-    for idx in detections.index.drop_duplicates():
-        on_target = pd.Series(detections.loc[idx, 'common_name'] == target)
-        valence = on_target.map({True: 1, False: -1})
-        segment_scores.append(np.sum(valence * detections.loc[idx, 'confidence']))
+    # Score each segment
+    valence = pd.Series(detections['scientific_name'] == scientific_name).map({True: 1, False: -1})
+    detections['scores'] = detections['confidence'] * valence
+    segment_scores = detections.groupby(['start_time', 'end_time'])['scores'].sum()
 
+    # Determine the expected segments and expand data frame to accommodate gaps in detection
+    last_start, last_end = segment_scores.index[-1]
+    segment_seconds = last_end - last_start
+    expected_index = pd.Index([(i, i + segment_seconds) for i in range(0, int(last_end), int(segment_seconds))])
+    segment_scores = segment_scores.reindex(expected_index).fillna(0)
+
+    # Score each window
     window_scores = [np.mean(segment_scores[i:(i + segments_per_window)]) for i in
                      range(len(segment_scores) - segments_per_window)]
 
