@@ -2150,6 +2150,23 @@ numpy = [
 dev = ["absl-py", "pyink", "pylint (>=2.6.0)", "pytest", "pytest-xdist"]
 
 [[package]]
+name = "mosqito"
+version = "1.2.1"
+description = "Modular Sound Quality Integrated Toolbox"
+optional = false
+python-versions = ">=3.5"
+groups = ["dev"]
+files = [
+    {file = "mosqito-1.2.1-py3-none-any.whl", hash = "sha256:c5370a729b12cb986ff39c71499e51201551b445623b5ca86aed66539d3cfe83"},
+    {file = "mosqito-1.2.1.tar.gz", hash = "sha256:50c0ebdc5102c67cfe4362178ce07d7e6b3211d7cb3e6051082e503ff019f16f"},
+]
+
+[package.dependencies]
+numpy = "*"
+pyuff = "*"
+scipy = "*"
+
+[[package]]
 name = "msgpack"
 version = "1.1.0"
 description = "MessagePack serializer"
@@ -3160,6 +3177,24 @@ files = [
     {file = "pytz-2025.2-py2.py3-none-any.whl", hash = "sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00"},
     {file = "pytz-2025.2.tar.gz", hash = "sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3"},
 ]
+
+[[package]]
+name = "pyuff"
+version = "2.4.6"
+description = "UFF (Universal File Format) read/write."
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "pyuff-2.4.6-py3-none-any.whl", hash = "sha256:dd3d858622c3973392d9fef6f3cba14aa37131c154534c500c729a38e6f188e6"},
+    {file = "pyuff-2.4.6.tar.gz", hash = "sha256:98d14df0324db36d50c02defeff5cef1b9a854c7bb8cbb1c0025c67dbc7134d0"},
+]
+
+[package.dependencies]
+numpy = "*"
+
+[package.extras]
+dev = ["build", "pytest", "sphinx", "sphinx-copybutton", "sphinx-rtd-theme", "twine", "wheel"]
 
 [[package]]
 name = "pywin32"
@@ -4550,4 +4585,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "682f9855ceede1910b31a6cc5dc4ef0325fca415848b9e22cb8c75349f061cc4"
+content-hash = "d7c3da48b0caf7296874fb824513e19b27b930a18ba12b0a0c2dba6246dadb8e"
