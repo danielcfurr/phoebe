@@ -892,6 +892,18 @@ files = [
 ]
 
 [[package]]
+name = "future"
+version = "1.0.0"
+description = "Clean single-source support for Python 3 and 2"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
+groups = ["dev"]
+files = [
+    {file = "future-1.0.0-py3-none-any.whl", hash = "sha256:929292d34f5872e70396626ef385ec22355a1fae8ad29e1a734c3e43f9fbc216"},
+    {file = "future-1.0.0.tar.gz", hash = "sha256:bd2968309307861edae1458a4f8a4f3598c03be43b97521076aebf5d94c07b05"},
+]
+
+[[package]]
 name = "gast"
 version = "0.6.0"
 description = "Python AST that abstracts the underlying Python version"
@@ -3107,6 +3119,23 @@ files = [
 windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
+name = "pyloudnorm"
+version = "0.1.1"
+description = "Implementation of ITU-R BS.1770-4 loudness algorithm in Python."
+optional = false
+python-versions = ">=3.0"
+groups = ["dev"]
+files = [
+    {file = "pyloudnorm-0.1.1-py3-none-any.whl", hash = "sha256:d7f12ebdd097a464d87ce2878fc4d942f15f8233e26cc03f33fefa226f869a14"},
+    {file = "pyloudnorm-0.1.1.tar.gz", hash = "sha256:63cd4e197dea4e7795160ea08ed02d318091bce883e436a6dbc5963326b71e1e"},
+]
+
+[package.dependencies]
+future = ">=0.16.0"
+numpy = ">=1.14.2"
+scipy = ">=1.0.1"
+
+[[package]]
 name = "pyparsing"
 version = "3.2.3"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -4585,4 +4614,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "d7c3da48b0caf7296874fb824513e19b27b930a18ba12b0a0c2dba6246dadb8e"
+content-hash = "9e20eb6ab821dd5988194e75a9e2e0409dc763a339da9d414c830b51d51aab05"

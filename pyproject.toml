@@ -27,6 +27,7 @@ scipy = "^1.15.2"
 noisereduce = "^3.0.3"
 ipywidgets = "^8.1.6"
 mosqito = "^1.2.1"
+pyloudnorm = "^0.1.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
