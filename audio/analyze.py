@@ -1,4 +1,3 @@
-import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -15,37 +14,42 @@ SEGMENTS_PER_SECOND = 3  # As per birdnet model each segment is 3 seconds long
 CLIP_SECONDS = 9  # Final desired clip duration
 
 BASE_DIR = Path(__file__).resolve().parent
-RAW_DIR = BASE_DIR / "data" / "RAW"
+RAW_DIR = BASE_DIR / "data" / "raw"
 MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
 ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
 
 
 def main() -> None:
+    """Analyze all .mp3 files in the raw data directory and write a .csv of the results"""
     analyzer = Analyzer()
 
-    manifest = pd.read_csv(MANIFEST_PATH).set_index("id")
-    manifest.index = manifest.index.astype(str)
+    manifest = pd.read_csv(MANIFEST_PATH, dtype={'id': str}, index_col='id')
 
     files = list(RAW_DIR.glob("*.mp3"))
+    n = len(files)
 
     analysis_results = []
     for i, filepath in enumerate(files):
-        print(i, "of", len(files))
+        print(i + 1, "of", n, ":", filepath)
         row = manifest.loc[filepath.stem]
         scientific_name = row["gen"] + " " + row["sp"]
-        result = analyze_file(
-            filepath,
-            window_size=WINDOW_SIZE,
-            analyzer=analyzer,
-            scientific_name=scientific_name,
-            lat=row["lat"],
-            lon=row["lon"],
-            date=row["date"]
-        )
-        result['id'] = filepath.stem
-        analysis_results.append(result)
+        try:
+            result = analyze_file(
+                filepath,
+                window_size=WINDOW_SIZE,
+                analyzer=analyzer,
+                scientific_name=scientific_name,
+                lat=row["lat"],
+                lon=row["lon"],
+                date=row["date"]
+            )
+            result['id'] = filepath.stem
+            analysis_results.append(result)
+        except Exception as ex:
+            print("Error processing", filepath)
+            print(ex)
 
-    analysis_df = pd.DataFrame(analysis_results)
+    analysis_df = pd.DataFrame(analysis_results).set_index('id')
     analysis_df.to_csv(ANALYSIS_PATH)
 
 

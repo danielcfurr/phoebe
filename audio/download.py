@@ -1,87 +1,103 @@
-from typing import List
 import requests
 import pandas as pd
 from pathlib import Path
 from geopy.distance import distance
-from dotenv import load_dotenv
-import os
 
-load_dotenv()  # Loads variables from .env into environment
-API_KEY = os.getenv("XENOCANTO_API_KEY")
 
 BASE_DIR = Path(__file__).resolve().parent
+MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
+RAW_PATH = BASE_DIR / "data" / "raw"
 
 LATITUDE = 37
 LONGITUDE = -122
-RECORDINGS = 10
-SEGMENTS = 2
-
-QUERY = {
-    'len': '>30',
-    'q': 'A',
-    'type': 'song'
-}
-
-with open(BASE_DIR / "scientific_names.txt") as f:
-    SCIENTIFIC_NAMES = f.read().splitlines()
+RECORDINGS_PER_SPECIES = 40
 
 
 def main():
-    """Main entry point for the script."""
-    # Get an API response for each species
-    manifest_holder = []
-    for scientific_name in SCIENTIFIC_NAMES:
-        print("Querying Xeno-Canto for", scientific_name)
-        manifest_holder.append(get_manifest_for_target(scientific_name=scientific_name, query=QUERY))
-
-    # Assemble the responses into a data frame
-    manifest = pd.concat(manifest_holder, axis=0)
-    Path("data").mkdir(exist_ok=True)
-    manifest.to_json(BASE_DIR / "data" / "manifest.json", orient="index", indent=2)
-
-    # Download each "raw" .mp3 if not already present, select best window, and save to "processed"
-    for idx, row in manifest.iterrows():
-        file_in = BASE_DIR / row['local_raw']
-        print(f"Retrieving recording {idx}, {file_in}")
-        download_if_absent(url=row['file'], filepath=file_in)
-
-    # Remove unused mp3s
-    prune_mp3s(BASE_DIR / "data" / "raw", expected=manifest['local_raw'].tolist())
+    """Select the top recordings by species and download them"""
+    manifest = pd.read_csv(MANIFEST_PATH, dtype={'id': str}, index_col='id')
+    rankings = score_and_rank_recordings(manifest)
+    index_for_downloading = rankings.index[rankings['rank'] <= RECORDINGS_PER_SPECIES]
+    n = len(index_for_downloading)
+    counter = 0
+    for idx, row in manifest.loc[index_for_downloading].iterrows():
+        counter += 1
+        local_name = RAW_PATH / (idx + ".mp3")
+        print(counter, "of", n, ":", local_name)
+        try:
+            download_if_absent(row['file'], local_name)
+        except Exception as ex:
+            print("Error downloading record_id", idx)
+            print(ex)
 
 
-def get_manifest_for_target(scientific_name: str, per_page=500, query=None) -> pd.DataFrame:
-    """Get a dataframe of audio files for target bird from Xeno-Canto"""
-    base_url = "https://xeno-canto.org/api/3/recordings"
 
-    if query is None:
-        query = {}
+def score_and_rank_recordings(manifest: pd.DataFrame) -> pd.DataFrame:
+    """Score and rank order (by species) the files available for download"""
+    # Use only rows having all necessary data points
+    df = manifest[['gen', 'sp', 'length', 'lat', 'lon', 'q', 'smp']].copy()
+    df = df.dropna()
 
-    query['sp'] = scientific_name
+    # Calculate values needed for scoring
+    df['seconds'] = df['length'].apply(time_to_seconds)
+    df['km'] = df.apply(lambda row: distance((LATITUDE, LONGITUDE), (row['lat'], row['lon'])).km, axis=1)
 
-    query_string = ' '.join([f'{key}:"{item}"' for key, item in query.items()])
+    # Apply some filter using hard limits
+    df = df.loc[df['seconds'] >= 30]
+    df = df.loc[df['seconds'] <= 300]
+    df = df.loc[df['smp'] >= 40000]
 
-    response = requests.get(base_url, params={"query": query_string, "key": API_KEY, "per_page": per_page})
+    # Score and rank recordings available for download
+    output = df[['gen', 'sp', 'km', 'seconds']].copy()
+    output['quality_score'] = df['q'].apply(score_quality)
+    output['seconds_score'] = df['seconds'].apply(score_seconds)
+    output['distance_score'] = df['km'].apply(score_distance)
+    output['final_score'] = output[['quality_score', 'seconds_score', 'distance_score']].sum(axis=1)
+    output['rank'] = output.groupby(['gen', 'sp'])['final_score'].rank(method='first')
 
-    # Check for success
-    if response.status_code == 200:
-        data = response.json()
+    return output
+
+
+def time_to_seconds(x: str) -> int:
+    """Convert a string like hh:mm:ss or mm:ss to an integer count of seconds"""
+    splits = [int(s) for s in x.split(":")]
+    if len(splits) == 2:
+        splits = [0] + splits
+    elif len(splits) != 3:
+        raise ValueError("Expected hh:mm:ss or mm:ss")
+    return sum([s*60**(2-i) for i, s in enumerate(splits)])
+
+
+def score_seconds(x: int) -> float:
+    """Score a recording duration on the range zero to one"""
+    if x < 30:
+        return 0.0
+    elif x < 60:
+        return (x / 60)**2
     else:
-        print(f"Request failed with status code {response.status_code}")
-        return pd.DataFrame()
+        return (60 / x)**1
 
-    recordings = data.pop('recordings')
-    print(data)
 
-    if len(data):
-        df = pd.DataFrame(recordings).set_index('id')
-        df['km'] = df.apply(lambda row: distance((LATITUDE, LONGITUDE), (row['lat'], row['lon'])).km, axis=1)
-        # penalty = df['q'].map({'A': 0, 'B': 500, 'C': 1000}).fillna(2000)  # TODO: Kept as reminder, deleted later
-        # df['penalized_km'] = df['km'] + penalty
-        df['local_raw'] = 'data/raw/' + df.index + '.mp3'
-        df['local_processed'] = 'data/processed/' + df.index + '.mp3'
-        return df.sort_values('km').head(RECORDINGS)
+def score_quality(x: str) -> float:
+    """Score a recording for quality rating on the range zero to one"""
+    if x == "A":
+        return 1.0
+    elif x == "B":
+        return 0.8
+    elif x == "C":
+        return 0.6
+    elif x == "E":
+        return 0.0
     else:
-        return pd.DataFrame(index=pd.Series(name='id'))
+        return 0.3
+
+
+def score_distance(x: float) -> float:
+    """Score a recording based on distance (closer is better) on the range zero to one"""
+    if x > 5000:
+        return 0.0
+    else:
+        return 1 - (x/5000)**2
 
 
 def download_if_absent(url: str, filepath: str) -> bool:
@@ -101,19 +117,6 @@ def download_if_absent(url: str, filepath: str) -> bool:
         f.write(response.content)
 
     return True
-
-
-def prune_mp3s(directory: Path, expected: List[Path | str]) -> None:
-    """Remove "unexpected" .mp3 files from a directory"""
-    directory = directory.resolve()
-    expected = [Path(e).resolve() for e in expected]
-
-    for fp in directory.glob("*.mp3"):
-        if fp in expected:
-            pass
-        else:
-            fp.unlink()
-            print('Pruned', str(fp))
 
 
 if __name__ == '__main__':

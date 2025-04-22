@@ -1,92 +1,83 @@
 import json
 import pandas as pd
-import numpy as np
 from pathlib import Path
 from pydub import AudioSegment
+from collections import defaultdict
 
-from birdnetlib import Recording
-from birdnetlib.analyzer import Analyzer
 
 BASE_DIR = Path(__file__).resolve().parent
-
-SEGMENTS = 2
+RAW_DIR = BASE_DIR / "data" / "raw"
+PROCESSED_DIR = BASE_DIR / "data" / "processed"
+MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
+ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
+APP_DATA_PATH = BASE_DIR / "data" / "app_data.json"
 
 
 def main():
-    """Main entry point for the script."""
-    # May as well fail here first to avoid unproductive API calls
-    analyzer = Analyzer()
+    manifest = pd.read_csv(MANIFEST_PATH, index_col="id", dtype={"id": str})
+    analysis = pd.read_csv(ANALYSIS_PATH, index_col="id", dtype={"id": str})
+    best_recording_ids = get_best_recording_ids(analysis)
 
-    with open(BASE_DIR / "data" / "manifest.json") as f:
-        manifest = json.load(f)
+    recordings = {}
+    n = len(best_recording_ids)
+    for i, idx in enumerate(best_recording_ids):
+        print(i + 1, "of", n, ":", idx)
+        analysis_row = analysis.loc[idx]
+        manifest_row = manifest.loc[idx]
+        file_name = idx + ".mp3"
+        try:
+            clip_mp3(
+                input_path=RAW_DIR / file_name,
+                output_path=PROCESSED_DIR / file_name,
+                start_sec=analysis_row["start"],
+                end_sec=analysis_row["end"]
+            )
+        except Exception as ex:
+            print("Error with", idx)
+            print(ex)
+        finally:
+            recordings[idx] = {
+                "scientific_name": analysis_row["scientific_name"],
+                "common_name": manifest_row["en"],
+                "author": manifest_row["rec"],
+                "license": manifest_row["lic"],
+                "url": manifest_row["url"],
+                "file_name": idx + ".mp3"
+            }
 
-    raw_data_dir = BASE_DIR / 'data' / 'processed'
-    for file in raw_data_dir.iterdir():
-        if file.is_file():
-            file.unlink()
 
-    for recoding_id, data in manifest.items():
-        file_in = BASE_DIR / data['local_raw']
-        file_out = BASE_DIR / data['local_processed']
-        print(f"Processing recording {recoding_id}, {file_in}, {file_out}")
+    lookup = defaultdict(list)
+    for record_id, record_data in recordings.items():
+        lookup[record_data['scientific_name']].append(record_id)
 
-        recording = analyze(analyzer, filepath=file_in, lat=data['lat'], lng=data['lon'], date=data['date'])
-
-        scientific_name = data['gen'] + ' ' + data['sp']
-        start, end, score = search_windows(recording, scientific_name=scientific_name, segments_per_window=SEGMENTS)
-        process_mp3(file_in, start_sec=start, end_sec=end, output_path=file_out)
+    app_data = {"lookup": lookup, "recordings": recordings}
+    with open(APP_DATA_PATH, "w") as file:
+        json.dump(app_data, file,  indent=4)
 
 
-def analyze(analyzer: Analyzer, filepath: str, lat: float, lng: float, date: str) -> Recording:
-    """Run the birdnet model against an audio file"""
-    recording = Recording(
-        analyzer, filepath,
-        lat=lat, lon=lng, date=pd.to_datetime(date),
-        return_all_detections=True,
+def get_best_recording_ids(analysis: pd.DataFrame) -> list:
+    return (
+        analysis
+        .sort_values(by=['presence_score', 'floor_to_peak'], ascending=[False, True])
+        .groupby('scientific_name')
+        .head(20)
+        .sort_values(by=['floor_to_peak'], ascending=[True])
+        .groupby('scientific_name')
+        .head(10)
+        .index
+        .tolist()
     )
 
-    recording.analyze()
 
-    return recording
-
-
-def search_windows(rec: Recording, scientific_name: str, segments_per_window) -> tuple:
-    """Return the start time, end time, and score for the best window in a recording"""
-    detections = pd.DataFrame(rec.detections)
-
-    # Score each segment
-    valence = pd.Series(detections['scientific_name'] == scientific_name).map({True: 1, False: -1})
-    detections['scores'] = detections['confidence'] * valence
-    segment_scores = detections.groupby(['start_time', 'end_time'])['scores'].sum()
-
-    # Determine the expected segments and expand data frame to accommodate gaps in detection
-    last_start, last_end = segment_scores.index[-1]
-    segment_seconds = last_end - last_start
-    expected_index = pd.Index([(i, i + segment_seconds) for i in range(0, int(last_end), int(segment_seconds))])
-    segment_scores = segment_scores.reindex(expected_index).fillna(0)
-
-    # Score each window
-    window_scores = [np.mean(segment_scores[i:(i + segments_per_window)]) for i in
-                     range(len(segment_scores) - segments_per_window)]
-
-    best = np.argmax(window_scores)
-    start = best * segment_seconds
-    end = (best + segments_per_window) * segment_seconds
-
-    return start, end, window_scores[best]
-
-
-def process_mp3(raw_path: str, start_sec: float, end_sec: float, output_path: str) -> None:
+def clip_mp3(input_path: str, output_path: str, start_sec: float, end_sec: float) -> None:
     """Clip an audio file saving a new copy"""
-    audio = AudioSegment.from_mp3(raw_path)
+    audio = AudioSegment.from_mp3(input_path)
     clipped = audio[start_sec * 1000:end_sec * 1000]
 
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     clipped.export(path, format="mp3")
-
-    return None
 
 
 if __name__ == '__main__':
