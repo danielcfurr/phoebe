@@ -1,34 +1,46 @@
-from phoebe import BIRDS, RECORDS, ID_LOOKUP
+# from phoebe import BIRDS, RECORDS, ID_LOOKUP
+import json
 import streamlit as st
 from pathlib import Path, PurePosixPath
 import random
 
+AUDIO_PATH = Path().resolve() / "audio" / "data" / "processed"
+APP_DATA_PATH = Path().resolve() / "audio" / "data" / "app_data.json"
+
+with open(APP_DATA_PATH) as file:
+    app_data = json.load(file)
+
+lookup = app_data['lookup']
+recordings = app_data['recordings']
+birds = list(lookup.keys())
+
 
 def generate_item():
-    paired_bird, odd_bird = random.sample(BIRDS, k=2)
-    paired_id_list = random.sample(ID_LOOKUP[paired_bird], k=2)
-    odd_id_list = random.sample(ID_LOOKUP[odd_bird], k=1)
+    paired_bird, odd_bird = random.sample(birds, k=2)
+    paired_id_list = random.sample(lookup[paired_bird], k=2)
+    odd_id_list = random.sample(lookup[odd_bird], k=1)
     shuffled_id_list = random.sample(paired_id_list + odd_id_list, k=3)
     return shuffled_id_list, odd_id_list[0]
 
 
 def audio_widget(record_id):
-    record = RECORDS[record_id]
-    audio_file = open("audio/" + record["local_processed"], "rb")
+    record = recordings[record_id]
+    file_path = AUDIO_PATH / record["file_name"]
+    audio_file = open(file_path, "rb")
     audio_bytes = audio_file.read()
     st.audio(audio_bytes, format="audio/mp3")
 
 
 def credit(record_id, reveal=True):
-    record = RECORDS[record_id]
+    record = recordings[record_id]
     if reveal:
-        lic_text, lic_number = PurePosixPath(record["lic"]).parts[-2:]
+        lic_text, lic_number = PurePosixPath(record["license"]).parts[-2:]
         st.write(f"""
-            **{record['en']}** <br>
+            **{record['common_name']}** <br>
             <span style="color:gray;">
             [Recording]({record["url"]}): 
-            {record["rec"]} 
-            ([CC {lic_text} {lic_number}]({record["lic"]})) <br>
+            {record["author"]} 
+            ([CC {lic_text} {lic_number}]({record["license"]})) <br>
             Photo: First Last (License) <br>
             </span>
         """, unsafe_allow_html=True)

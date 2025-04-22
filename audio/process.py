@@ -25,6 +25,8 @@ def main():
         analysis_row = analysis.loc[idx]
         manifest_row = manifest.loc[idx]
         file_name = idx + ".mp3"
+
+        # Try to clip the audio file
         try:
             clip_mp3(
                 input_path=RAW_DIR / file_name,
@@ -35,7 +37,10 @@ def main():
         except Exception as ex:
             print("Error with", idx)
             print(ex)
-        finally:
+            continue
+
+        # Test the audio file may be loaded and add metadata to dictionary or delete file
+        if validate_mp3(PROCESSED_DIR / file_name):
             recordings[idx] = {
                 "scientific_name": analysis_row["scientific_name"],
                 "common_name": manifest_row["en"],
@@ -44,7 +49,8 @@ def main():
                 "url": manifest_row["url"],
                 "file_name": idx + ".mp3"
             }
-
+        else:
+            Path(PROCESSED_DIR / file_name).unlink()
 
     lookup = defaultdict(list)
     for record_id, record_data in recordings.items():
@@ -78,6 +84,15 @@ def clip_mp3(input_path: str, output_path: str, start_sec: float, end_sec: float
     path.parent.mkdir(parents=True, exist_ok=True)
 
     clipped.export(path, format="mp3")
+
+
+def validate_mp3(file_path):
+    try:
+        _ = AudioSegment.from_file(file_path)
+        return True
+    except Exception as e:
+        print("Validation error with", file_path, ":", e)
+        return False
 
 
 if __name__ == '__main__':
