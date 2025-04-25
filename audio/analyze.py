@@ -9,14 +9,15 @@ import pyloudnorm
 
 pd.set_option('future.no_silent_downcasting', True)
 
-WINDOW_SIZE = 4  # Number of 3-second segments to scan for presence
-SEGMENTS_PER_SECOND = 3  # As per birdnet model each segment is 3 seconds long
-CLIP_SECONDS = 9  # Final desired clip duration
-
 BASE_DIR = Path(__file__).resolve().parent
 RAW_DIR = BASE_DIR / "data" / "raw"
 MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
 ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
+
+# Settings for birdnet model and presence analysis
+WEIGHTS = np.square(np.linspace(2, 1, 7))
+OVERLAP = 1  # Overlap is a misnomer. Value of one means that three seconds frames have two seconds of overlap.
+MIN_CONF = 0
 
 
 def main() -> None:
@@ -36,12 +37,14 @@ def main() -> None:
         try:
             result = analyze_file(
                 filepath,
-                window_size=WINDOW_SIZE,
+                weights=WEIGHTS,
                 analyzer=analyzer,
                 scientific_name=scientific_name,
                 lat=row["lat"],
                 lon=row["lon"],
-                date=row["date"]
+                date=pd.to_datetime(row["date"]),
+                overlap=OVERLAP,
+                min_conf=MIN_CONF,
             )
             result['id'] = filepath.stem
             analysis_results.append(result)
@@ -53,72 +56,86 @@ def main() -> None:
     analysis_df.to_csv(ANALYSIS_PATH)
 
 
-def analyze_file(filepath: Path, window_size: int, analyzer: Analyzer,
-                 scientific_name: str, lat: float, lon: float, date: str) -> dict:
+def analyze_file(filepath: Path, analyzer: Analyzer, scientific_name: str, weights: np.ndarray, **kwargs) -> dict:
     """Run all analysis tasks for a given file"""
-    result = find_presence(filepath, window_size=window_size, analyzer=analyzer,
-                           scientific_name=scientific_name, lat=lat, lon=lon, date=date)
+    presence_start, presence_end, df = analyze_presence(
+        analyzer,
+        filepath=filepath,
+        scientific_name=scientific_name,
+        weights=weights,
+        **kwargs
+    )
+
+    # Start a dictionary of results to return
+    result = {
+        "scientific_name": scientific_name,
+        "presence_start": presence_start,
+        "presence_end": presence_end,
+        "presence_score": df['score'].max(),
+    }
+
     data, rate = librosa.load(filepath)
+
+    # Find an onset near to `presence_start` and add to dictionary
     result['start'] = find_onset(data, rate=rate, start=result['presence_start'])
-    result['end'] = result['start'] + CLIP_SECONDS
+    duration = presence_end - presence_start
+    result['end'] = result['start'] + duration
+
+    # Reduce audio data to a clip
     s = int(result['start'] * rate)
     e = int(result['end'] * rate)
-    result['floor_to_peak'] = floor_to_peak(data[s:e])
-    result['loudness'] = get_loudness(data[s:e], rate=rate)
+    clip = data[s:e]
+
+    # Add metrics for the clip to the dictionary
+    result['floor_to_peak'] = floor_to_peak(clip)
+    result['loudness'] = get_loudness(clip, rate=rate)
+
     return result
 
 
-def score_presence(target_bool: pd.Series, other_bool: pd.Series) -> float:
-    """Function to calculate a "presence" score for the bird of interest"""
-    target_bool = pd.Series(target_bool, dtype=bool)
-    other_bool = pd.Series(other_bool, dtype=bool)
-    if any(other_bool):
-        return 0.0
-    elif target_bool.iloc[0]:
-        return sum([float(t) / (i+1) for i, t in enumerate(target_bool)])
-    else:
-        return 0.0
-
-
-def find_presence(filepath: Path, window_size: int, analyzer: Analyzer = None, scientific_name: str = None,
-                  lat: float = None, lon: float = None, date: str = None) -> dict:
-    """Find the window with the best presence score for a given file"""
+def analyze_presence(analyzer: Analyzer, filepath: Path, scientific_name: str, weights: np.ndarray, **kwargs) -> tuple:
+    """Analyze an audio file for presence of target bird, identifying the best segment"""
     if analyzer is None:
         analyzer = Analyzer()
 
-    recording = Recording(analyzer, filepath, return_all_detections=True, lat=lat, lon=lon, date=pd.to_datetime(date))
+    recording = Recording(analyzer, filepath, **kwargs)
     recording.analyze()
+
+    # Make dataframe with one row per frame summarizing presence of target bird and off target birds
     detections = pd.DataFrame(recording.detections)
+    grouper = detections.groupby("start_time")
+    on_target = grouper.apply(
+        lambda grp: sum(grp['confidence'] * pd.Series(grp['scientific_name'] == scientific_name).astype(float)),
+        include_groups=False
+    )
+    off_target = grouper.apply(
+        lambda grp: sum(grp['confidence'] * pd.Series(grp['scientific_name'] != scientific_name).astype(float)),
+        include_groups=False
+    )
+    aggregate = pd.DataFrame({"on_target": on_target, "off_target": off_target})
+    aggregate['delta'] = aggregate["on_target"] - aggregate["off_target"]
 
-    if scientific_name is None:
-        counts = detections['scientific_name'].value_counts()
-        scientific_name = counts.index[0]
+    # Expand that dataframe to include any missing time points / frames
+    last_start = detections["start_time"].iloc[-1]
+    increment = 3 if recording.overlap == 0 else recording.overlap  # overlap
+    expected_starts = np.arange(0, last_start + increment, increment)
+    aggregate = aggregate.reindex(expected_starts).fillna(0)
 
-    df = detections[['start_time', 'scientific_name']].copy()
-    df['segment'] = df['start_time'].div(SEGMENTS_PER_SECOND).astype(int)
-    df['target'] = df['scientific_name'] == scientific_name
+    # Get a weighted average score across a number of frames
+    n_frames = len(weights)
+    score_holder = [pd.NA] * len(aggregate)
+    for i in range(len(aggregate) - n_frames + 1):
+        subset = aggregate.iloc[i:i + n_frames]
+        weighted_mean = np.average(subset["on_target"] - subset["off_target"], weights=weights)
+        score_holder[i] = weighted_mean
 
-    target_bool = df.groupby('segment')['target'].apply(lambda x: np.any(x))
-    target_bool = target_bool.reindex(range(max(target_bool.index) + 1)).fillna(False)
+    # Find the best start and end times
+    aggregate['score'] = score_holder
+    best = aggregate['score'].argmax()
+    best_start_time = aggregate.index[best]
+    best_end_time = aggregate.index[best+n_frames] + 3
 
-    other_bool = df.groupby('segment')['target'].apply(lambda x: np.any(~x))
-    other_bool = other_bool.reindex(range(max(other_bool.index) + 1)).fillna(False)
-
-    presence_score = [
-        score_presence(target_bool.iloc[i:i+window_size], other_bool.iloc[i:i+window_size])
-        for i in range(len(target_bool))
-    ]
-
-    best = int(np.argmax(presence_score))
-
-    result = {
-        "scientific_name": scientific_name,
-        "presence_start": best * SEGMENTS_PER_SECOND,
-        "presence_end": (best + window_size) * SEGMENTS_PER_SECOND,
-        "presence_score": presence_score[best],
-    }
-
-    return result
+    return best_start_time, best_end_time, aggregate
 
 
 def find_onset(data: np.ndarray, rate: float, start: float, delta: float = .25) -> float:

@@ -11,68 +11,63 @@ PROCESSED_DIR = BASE_DIR / "data" / "processed"
 MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
 ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
 APP_DATA_PATH = BASE_DIR / "data" / "app_data.json"
+RECORDINGS_PER_BIRD = 10
 
 
 def main():
     manifest = pd.read_csv(MANIFEST_PATH, index_col="id", dtype={"id": str})
     analysis = pd.read_csv(ANALYSIS_PATH, index_col="id", dtype={"id": str})
-    best_recording_ids = get_best_recording_ids(analysis)
+    analysis = sort_analysis_dataframe(analysis)
 
-    recordings = {}
-    n = len(best_recording_ids)
-    for i, idx in enumerate(best_recording_ids):
-        print(i + 1, "of", n, ":", idx)
-        analysis_row = analysis.loc[idx]
-        manifest_row = manifest.loc[idx]
-        file_name = idx + ".mp3"
+    app_data = defaultdict(list)
+    for sn in analysis['scientific_name'].drop_duplicates():
+        counter = 0
+        for idx, analysis_row in analysis.loc[analysis['scientific_name'] == sn].iterrows():
+            manifest_row = manifest.loc[idx]
+            file_name = idx + ".mp3"
+            input_path = RAW_DIR / file_name
+            output_path = PROCESSED_DIR / file_name
 
-        # Try to clip the audio file
-        try:
-            clip_mp3(
-                input_path=RAW_DIR / file_name,
-                output_path=PROCESSED_DIR / file_name,
-                start_sec=analysis_row["start"],
-                end_sec=analysis_row["end"]
-            )
-        except Exception as ex:
-            print("Error with", idx)
-            print(ex)
-            continue
+            try:
+                # Clip the audio file and write
+                clip_mp3(
+                    input_path=input_path,
+                    output_path=output_path,
+                    start_sec=analysis_row["start"],
+                    end_sec=analysis_row["end"]
+                )
+                # Test file can be loaded
+                _ = AudioSegment.from_file(output_path)
+                # Record metadata
+                app_data[sn].append({
+                    "recording_id": idx,
+                    "scientific_name": analysis_row["scientific_name"],
+                    "common_name": manifest_row["en"],
+                    "author": manifest_row["rec"],
+                    "license": manifest_row["lic"],
+                    "url": manifest_row["url"],
+                    "file_name": idx + ".mp3",
+                    "start_sec": analysis_row["start"],
+                    "end_sec": analysis_row["end"],
+                })
+                print("Processed", idx, sn)
+                counter += 1
+            except Exception as ex:
+                output_path.unlink(missing_ok=True)
+                print("Error processing", idx, sn, ":", ex)
 
-        # Test the audio file may be loaded and add metadata to dictionary or delete file
-        if validate_mp3(PROCESSED_DIR / file_name):
-            recordings[idx] = {
-                "scientific_name": analysis_row["scientific_name"],
-                "common_name": manifest_row["en"],
-                "author": manifest_row["rec"],
-                "license": manifest_row["lic"],
-                "url": manifest_row["url"],
-                "file_name": idx + ".mp3"
-            }
-        else:
-            Path(PROCESSED_DIR / file_name).unlink()
+            if counter >= RECORDINGS_PER_BIRD:
+                break
 
-    lookup = defaultdict(list)
-    for record_id, record_data in recordings.items():
-        lookup[record_data['scientific_name']].append(record_id)
-
-    app_data = {"lookup": lookup, "recordings": recordings}
     with open(APP_DATA_PATH, "w") as file:
         json.dump(app_data, file,  indent=4)
 
 
-def get_best_recording_ids(analysis: pd.DataFrame) -> list:
-    return (
-        analysis
-        .sort_values(by=['presence_score', 'floor_to_peak'], ascending=[False, True])
-        .groupby('scientific_name')
-        .head(20)
-        .sort_values(by=['floor_to_peak'], ascending=[True])
-        .groupby('scientific_name')
-        .head(10)
-        .index
-        .tolist()
-    )
+def sort_analysis_dataframe(analysis: pd.DataFrame) -> pd.DataFrame:
+    """Sort dataframe based on goodness of recording segments"""
+    score = (1-analysis["floor_to_peak"])**2 * analysis["presence_score"]
+    new_index = score.sort_values(ascending=False).index
+    return analysis.loc[new_index]
 
 
 def clip_mp3(input_path: str, output_path: str, start_sec: float, end_sec: float) -> None:
@@ -85,14 +80,6 @@ def clip_mp3(input_path: str, output_path: str, start_sec: float, end_sec: float
 
     clipped.export(path, format="mp3")
 
-
-def validate_mp3(file_path):
-    try:
-        _ = AudioSegment.from_file(file_path)
-        return True
-    except Exception as e:
-        print("Validation error with", file_path, ":", e)
-        return False
 
 
 if __name__ == '__main__':
