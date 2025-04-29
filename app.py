@@ -4,6 +4,7 @@ from pathlib import Path, PurePosixPath
 import random
 import argparse
 
+NUMBER_QUESTIONS = 10
 
 AUDIO_DIR = Path().resolve() / "audio" / "data" / "processed"
 APP_DATA_PATH = Path().resolve() / "audio" / "data" / "app_data.json"
@@ -29,6 +30,7 @@ SCIENTIFIC_NAMES, RECORDINGS, IMAGES = load_app_data()
 def main(rate: bool):
     page = st.session_state.get("page", "start")
     st.session_state.counter = st.session_state.get("counter", 1)
+    st.session_state.correctness = st.session_state.get("correctness", [])
 
     if rate:
         st.session_state.rate = True
@@ -39,7 +41,7 @@ def main(rate: bool):
 
     if page == "start":
         show_start_page()
-    elif st.session_state.counter > 3:
+    elif st.session_state.counter > NUMBER_QUESTIONS:
         show_conclusion_page()
     elif page == "question":
         show_question_page()
@@ -48,7 +50,7 @@ def main(rate: bool):
 
 
 def show_start_page():
-    st.markdown("# Start")
+    st.markdown("# Odd Bird Out")
 
     if st.button("Start", key=f"btn_start"):
         st.session_state.page = "question"
@@ -57,7 +59,9 @@ def show_start_page():
 
 
 def show_question_page():
-    st.markdown(f"# Question {st.session_state.counter}")
+    st.markdown("# Odd Bird Out")
+    progress_widget()
+    st.markdown("## Which is the odd bird?")
 
     opt_1 = render_option(0, st.session_state.recordings[0], active=True)
     if st.session_state.rate:
@@ -81,7 +85,9 @@ def show_question_page():
 
 
 def show_review_page():
-    st.markdown(f"# Review {st.session_state.counter}")
+    st.markdown(f"# Odd Bird Out")
+    progress_widget()
+    st.markdown(f"## How did you do?")
 
     _ = render_option(0, st.session_state.recordings[0], active=False)
     if st.session_state.rate:
@@ -95,7 +101,9 @@ def show_review_page():
     if st.session_state.rate:
         render_ratings(st.session_state.recordings[2])
 
-    if st.session_state.answer == st.session_state.key:
+    correct = st.session_state.answer == st.session_state.key
+
+    if correct:
         st.success("✅ Correct!")
     else:
         st.error(f"❌ Incorrect.")
@@ -105,16 +113,21 @@ def show_review_page():
             save_ratings()
         st.session_state.page = "question"
         st.session_state.counter += 1
+        st.session_state.correctness.append(correct)
         generate_question()
         st.rerun()
 
 
 def show_conclusion_page():
-    st.markdown("# Conclusion")
+    st.markdown("# Odd Bird Out")
+    progress_widget()
+    st.markdown("## You have completed this round!")
 
-    if st.button("Replay", key=f"btn_replay"):
-        st.session_state.page = "start"
-        st.session_state.counter = 1
+    score = int(sum(st.session_state.correctness) / NUMBER_QUESTIONS * 100)
+    st.markdown(f"Your score for the round is {score}%.")
+
+    if st.button("Restart", key=f"btn_restart"):
+        st.session_state.clear()
         st.rerun()
 
 
@@ -238,6 +251,28 @@ def render_ratings(recording):
             st.session_state.ratings[recording_id]["Multiple"] = rating_widget(
                 recording_id, label="Multiple", options=["None", "Okay", "Bad"]
             )
+
+
+def progress_widget():
+    correctness = st.session_state.correctness
+    number_answered = len(correctness)
+    spaces = "&nbsp;" * 5
+
+    text = "<div style='font-size: 24px;'>"
+    for i in range(NUMBER_QUESTIONS):
+        if i == number_answered:
+            text += f"<span style='font-weight: bold;'>{i + 1}</span>{spaces}"
+        elif i < number_answered:
+            if correctness[i]:
+                text += f"<span style='color: green;'>{i + 1}</span>{spaces}"
+            else:
+                text += f"<span style='color: orange;'>{i + 1}</span>{spaces}"
+        else:
+            text += f"<span style='color: gray;'>{i + 1}</span>{spaces}"
+
+    text += "</div>"
+
+    st.markdown(text, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
