@@ -71,7 +71,7 @@ def credit(record, reveal=True):
         scientific_name = record["scientific_name"]
 
         image = BIRD_IMAGE_DATA[scientific_name]
-        image_lic_text, image_lic_number = PurePosixPath(image["license_url"]).parts[-2:][:2]
+        image_lic_text, image_lic_number = PurePosixPath(image["license_url"]).parts[-3:-1]
 
         st.write(f"""
             **{record["common_name"]}**
