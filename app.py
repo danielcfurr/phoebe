@@ -3,12 +3,11 @@ import streamlit as st
 from pathlib import Path, PurePosixPath
 import random
 import argparse
-from time import time
 
 
 AUDIO_DIR = Path().resolve() / "audio" / "data" / "processed"
 APP_DATA_PATH = Path().resolve() / "audio" / "data" / "app_data.json"
-RATINGS_LOG_PATH = Path().resolve() / "ratings.jsonl"
+RATINGS_LOG_PATH = Path().resolve() / "ratings.json"
 BIRD_IMAGE_DATA_PATH = Path().resolve() / "images" / "data" / "bird_images.jsonl"
 BIRD_IMAGE_DIR = Path().resolve() / "images" / "data" / "birds"
 
@@ -20,6 +19,21 @@ BIRDS = list(APP_DATA.keys())
 with open(BIRD_IMAGE_DATA_PATH, "r") as file:
     BIRD_IMAGE_DATA = [json.loads(line) for line in file]
     BIRD_IMAGE_DATA = {x["scientific_name"]: x for x in BIRD_IMAGE_DATA}
+
+if RATINGS_LOG_PATH.exists():
+    with open(RATINGS_LOG_PATH, "r") as file:
+        ratings = json.load(file)
+else:
+    ratings = {}
+    for bird, records in APP_DATA.items():
+        for record in records:
+            ratings[record["recording_id"]] = {
+                "start_sec": record["start_sec"],
+                "end_sec": record["end_sec"],
+                "Noise": None,
+                "Presence": None,
+                "Multiple": None,
+            }
 
 
 def get_args():
@@ -63,12 +77,12 @@ def credit(record, reveal=True):
             **{record["common_name"]}**
             (*{scientific_name}*) <br>
             <span style="color:gray;">
-            [Recording]({record["url"]}): 
+            [Audio]({record["url"]}): 
             {record["author"]} 
             ([CC {recording_lic_text} {recording_lic_number}]({record["license"]})) <br>
             [Photo]({image["url"]}): 
             {image["author"]} 
-            ([CC {recording_lic_text} {recording_lic_number}]({image["license_url"]}))
+            ([CC {image_lic_text} {image_lic_number}]({image["license_url"]}))
             </span>
         """, unsafe_allow_html=True)
 
@@ -77,16 +91,16 @@ def credit(record, reveal=True):
         st.write("""
             *Secret bird* <br>
             <span style="color:gray;">
-            Recording: *???* <br>
+            Audio: *???* <br>
             Photo: *???* <br>
             </span>
         """, unsafe_allow_html=True)
 
 
-def rating_widget(i, label, options):
-    current_selection = st.session_state.ratings[i][label]
+def rating_widget(record_id, label, options):
+    current_selection = st.session_state.ratings[record_id][label]
     idx = None if current_selection is None else options.index(current_selection)
-    return st.radio(label + ":", options=options, key=f"radio_{label}_{i}", horizontal=False, index=idx)
+    return st.radio(label + ":", options=options, key=f"radio_{label}_{record_id}", horizontal=False, index=idx)
 
 
 def blank_ratings():
@@ -99,31 +113,30 @@ def blank_ratings():
 args = get_args()
 
 # Set up session state
-if "current_question" not in st.session_state:
-    st.session_state.current_question = generate_item()
+if "records" not in st.session_state:
+    st.session_state.records, st.session_state.answer_key = generate_item()
+    st.session_state.recording_ids = [rec["recording_id"] for rec in st.session_state.records]
+    st.session_state.ratings = {rid: ratings[rid] for rid in st.session_state.recording_ids}
 if "submitted" not in st.session_state:
     st.session_state.submitted = False
 if "next_question" not in st.session_state:
     st.session_state.next_question = False
 if "selected" not in st.session_state:
     st.session_state.selected = None
-if "ratings" not in st.session_state and args.rate:
-    st.session_state.ratings = blank_ratings()
-
-records, answer_key = st.session_state.current_question
 
 
 # Layout starts here...
 
 st.title("Odd Bird Out")
 
-for i, rec in enumerate(records):
+for i, rec in enumerate(st.session_state.records):
+    recording_id = st.session_state.recording_ids[i]
     with st.container():
         button_col, audio_col, image_col = st.columns([.5, 4, 1])
 
         with button_col:
             if st.session_state.submitted:
-                if i == answer_key:
+                if i == st.session_state.answer_key:
                     st.button("✅", key=f"btn_{i}")
                 elif i == st.session_state.selected:
                     st.button("❌", key=f"btn_{i}")
@@ -147,48 +160,41 @@ for i, rec in enumerate(records):
             _, presence_col, noise_col, multiple_col = st.columns([.5] + [5/3]*3)
 
             with presence_col:
-                st.session_state.ratings[i]["Presence"] = rating_widget(
-                    i, label="Presence",  options=["Full", "Sparse", "Delayed"]
+                st.session_state.ratings[recording_id]["Presence"] = rating_widget(
+                    recording_id, label="Presence",  options=["Full", "Sparse", "Delayed"]
                 )
 
             with noise_col:
-                st.session_state.ratings[i]["Noise"] = rating_widget(
-                    i, label="Noise",  options=["None", "Okay", "Bad"]
+                st.session_state.ratings[recording_id]["Noise"] = rating_widget(
+                    recording_id, label="Noise",  options=["None", "Okay", "Bad"]
                 )
 
             with multiple_col:
-                st.session_state.ratings[i]["Multiple"] = rating_widget(
-                    i, label="Multiple",  options=["None", "Okay", "Bad"]
+                st.session_state.ratings[recording_id]["Multiple"] = rating_widget(
+                    recording_id, label="Multiple",  options=["None", "Okay", "Bad"]
                 )
 
 
 # --- Feedback ---
 if st.session_state.submitted:
-    if st.session_state.selected == answer_key:
+    if st.session_state.selected == st.session_state.answer_key:
         st.success("✅ Correct!")
     else:
         st.error(f"❌ Incorrect.")
 
 # --- Next Question Button ---
 if st.session_state.submitted and st.button("Next Question"):
-    st.session_state.current_question = generate_item()
-    st.session_state.submitted = False
-    st.session_state.selected = None
-
     # Optional handling of ratings
     if args.rate:
-        timestamp = time()
+        for recording_id, rating_data in st.session_state.ratings.items():
+            ratings[recording_id] = rating_data
+        with open(RATINGS_LOG_PATH, "w") as f:
+            json.dump(ratings, fp=f, indent=4)
 
-        for i, rec in enumerate(records):
-            rating = st.session_state.ratings[i].copy()
-            rating["recording_id"] = rec["recording_id"]
-            rating["start_sec"] = rec["start_sec"]
-            rating["end_sec"] = rec["end_sec"]
-            rating["timestamp"] = timestamp
-
-            with open(RATINGS_LOG_PATH, "a") as f:
-                f.write(json.dumps(rating) + "\n")
-
-        st.session_state.ratings = blank_ratings()
+    st.session_state.records, st.session_state.answer_key = generate_item()
+    st.session_state.recording_ids = [rec["recording_id"] for rec in st.session_state.records]
+    st.session_state.ratings = {rid: ratings[rid] for rid in st.session_state.recording_ids}
+    st.session_state.submitted = False
+    st.session_state.selected = None
 
     st.rerun()
