@@ -16,6 +16,10 @@ RECORDINGS_PER_SPECIES = 100
 def main():
     """Select the top recordings by species and download them"""
     manifest = pd.read_csv(MANIFEST_PATH, dtype={'id': str}, index_col='id')
+
+    # Do not use works with licenses prohibiting derivatives
+    manifest = manifest.loc[~manifest['lic'].str.contains("-nd")]
+
     rankings = score_and_rank_recordings(manifest)
     index_for_downloading = rankings.index[rankings['rank'] <= RECORDINGS_PER_SPECIES]
     n = len(index_for_downloading)

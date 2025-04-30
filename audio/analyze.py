@@ -9,6 +9,7 @@ import pyloudnorm
 
 pd.set_option('future.no_silent_downcasting', True)
 
+
 BASE_DIR = Path(__file__).resolve().parent
 RAW_DIR = BASE_DIR / "data" / "raw"
 MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"

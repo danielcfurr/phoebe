@@ -210,10 +210,12 @@ def render_option(i, recording, active=True):
                     <span style="color:gray;">
                     [Audio]({recording["url"]}): 
                     {recording["author"]} 
-                    ([CC {recording_lic_text} {recording_lic_number}]({recording["license"]})) <br>
+                    ([CC {recording_lic_text} {recording_lic_number}]({recording["license"]})).
+                    Cropped from original. <br>
                     [Photo]({image["url"]}): 
                     {image["author"]} 
-                    ([CC {image_lic_text} {image_lic_number}]({image["license_url"]}))
+                    ([CC {image_lic_text} {image_lic_number}]({image["license_url"]})).
+                    Cropped from original.
                     </span>
                 """, unsafe_allow_html=True)
 
