@@ -16,7 +16,7 @@ MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
 ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
 
 # Settings for birdnet model and presence analysis
-WEIGHTS = np.square(np.linspace(2, 1, 7))
+WEIGHTS = np.square(np.linspace(2, 1, 4))
 OVERLAP = 1  # Overlap is a misnomer. Value of one means that three seconds frames have two seconds of overlap.
 MIN_CONF = 0
 

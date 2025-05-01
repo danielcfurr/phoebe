@@ -173,9 +173,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-
 # Custom additions
 *.DS_Store
 .idea/
-*.mp3
-.env
+scratch.py
+audio/data/raw/analysis.csv
+audio/data/manifest.csv
+audio/data/raw/*

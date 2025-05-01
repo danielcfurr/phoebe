@@ -11,7 +11,7 @@ PROCESSED_DIR = BASE_DIR / "data" / "processed"
 MANIFEST_PATH = BASE_DIR / "data" / "manifest.csv"
 ANALYSIS_PATH = BASE_DIR / "data" / "analysis.csv"
 APP_DATA_PATH = BASE_DIR / "data" / "app_data.json"
-LICENSE_MARKDOWN_PATH = BASE_DIR / "data" / "license.md"
+LICENSE_MARKDOWN_PATH = BASE_DIR / "data" / "licenses.md"
 RECORDINGS_PER_BIRD = 10
 
 
