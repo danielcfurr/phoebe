@@ -172,3 +172,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Custom additions
+*.DS_Store
+.idea/
+scratch.py
+ratings.json
+audio/data/raw/*
+notebooks/*
