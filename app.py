@@ -50,18 +50,41 @@ def main(rate: bool):
 
 
 def show_start_page():
-    st.markdown("# Odd Bird Out")
+    st.markdown("""
+    ## Odd Bird Out
+    
+    ### How to play
+    
+    Listen to three recordings of bird sounds. Two recordings will be of the 
+    same species, while one will be of the "odd bird"&mdash;a different species. Your goal is
+    to identify which recording is from the odd bird. Repeat this challenge ten times 
+    to see how high you can score.
+    
+    ### About
+    
+    This software relies on audio recordings retrieved from 
+    [xeno-canto.org](https://xeno-canto.org/)
+    and photographs from 
+    [commons.wikimedia.org](https://commons.wikimedia.org/),
+    all of which are made available under Creative Commons licenses. The individual creators
+    are credited within the game. This software is a part of 
+    [Phoebe](https://github.com/danielcfurr/phoebe), 
+    a project by 
+    [Daniel C. Furr](https://github.com/danielcfurr), 
+    and is licensed under 
+    [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0).
+    """)
 
-    if st.button("Start", key=f"btn_start"):
+    if st.button("Start game", key=f"btn_start"):
         st.session_state.page = "question"
         generate_question()
         st.rerun()
 
 
 def show_question_page():
-    st.markdown("# Odd Bird Out")
+    st.markdown("## Odd Bird Out")
     progress_widget()
-    st.markdown("## Which is the odd bird?")
+    st.markdown("### Which is the odd bird?")
 
     opt_1 = render_option(0, st.session_state.recordings[0], active=True)
     if st.session_state.rate:
@@ -85,9 +108,15 @@ def show_question_page():
 
 
 def show_review_page():
-    st.markdown(f"# Odd Bird Out")
+    st.markdown(f"## Odd Bird Out")
     progress_widget()
-    st.markdown(f"## How did you do?")
+
+    correct = st.session_state.answer == st.session_state.key
+
+    if correct:
+        st.markdown(f"""### Result: <span style="color:green">Correct!</span>""", unsafe_allow_html=True)
+    else:
+        st.markdown(f"""### Result: <span style="color:orange">Incorrect</span>""", unsafe_allow_html=True)
 
     _ = render_option(0, st.session_state.recordings[0], active=False)
     if st.session_state.rate:
@@ -101,13 +130,6 @@ def show_review_page():
     if st.session_state.rate:
         render_ratings(st.session_state.recordings[2])
 
-    correct = st.session_state.answer == st.session_state.key
-
-    if correct:
-        st.success("✅ Correct!")
-    else:
-        st.error(f"❌ Incorrect.")
-
     if st.button("Next", key=f"btn_next"):
         if st.session_state.rate:
             save_ratings()
@@ -119,12 +141,15 @@ def show_review_page():
 
 
 def show_conclusion_page():
-    st.markdown("# Odd Bird Out")
+    st.markdown("## Odd Bird Out")
     progress_widget()
-    st.markdown("## You have completed this round!")
 
     score = int(sum(st.session_state.correctness) / NUMBER_QUESTIONS * 100)
-    st.markdown(f"Your score for the round is {score}%.")
+    st.markdown(f"""
+    ### Your score for the round is {score}%
+    
+    Thank you for playing and please try again!
+    """)
 
     if st.button("Restart", key=f"btn_restart"):
         st.session_state.clear()

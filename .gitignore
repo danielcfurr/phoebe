@@ -177,6 +177,6 @@ cython_debug/
 *.DS_Store
 .idea/
 scratch.py
-audio/data/raw/analysis.csv
-audio/data/manifest.csv
+ratings.json
 audio/data/raw/*
+notebooks/*

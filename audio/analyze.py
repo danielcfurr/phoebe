@@ -132,9 +132,10 @@ def analyze_presence(analyzer: Analyzer, filepath: Path, scientific_name: str, w
 
     # Find the best start and end times
     aggregate['score'] = score_holder
-    best = aggregate['score'].argmax()
-    best_start_time = aggregate.index[best]
-    best_end_time = aggregate.index[best+n_frames] + 3
+    best_start_frame = aggregate['score'].argmax()
+    best_end_frame = best_start_frame + n_frames - 1
+    best_start_time = aggregate.index[best_start_frame]
+    best_end_time = aggregate.index[best_end_frame] + 3
 
     return best_start_time, best_end_time, aggregate
 
