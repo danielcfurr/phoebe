@@ -29,6 +29,15 @@ to
   - document the image licenses (in [images/data/licenses.md](images/data/licenses.md))
 
 
+The following command writes [requirements.txt](requirements.txt). Package dependencies for 
+local development are managed with Poetry, however this files is used when publishing
+the app to [streamlit.io/cloud](https://streamlit.io/cloud).
+
+```bash
+poetry export -f requirements.txt --output requirements.txt --without-hashes
+```
+
+
 ## Odd Bird Out
 
 After following the workflow above, a game of Odd Bird Out may be played.
