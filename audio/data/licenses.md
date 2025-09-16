@@ -62,6 +62,7 @@ The creator and license for each file is provided below.
 | 486800.mp3  | Paul Marvin                  | //xeno-canto.org/486800 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 500978.mp3  | Lauren Harter                | //xeno-canto.org/500978 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 506636.mp3  | johannes buhl                | //xeno-canto.org/506636 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
+| 509280.mp3  | William Whitehead            | //xeno-canto.org/509280 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 512267.mp3  | Peter Ward and Ken Hall      | //xeno-canto.org/512267 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 531583.mp3  | Thomas Magarian              | //xeno-canto.org/531583 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 536501.mp3  | Paul Marvin                  | //xeno-canto.org/536501 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
@@ -104,5 +105,4 @@ The creator and license for each file is provided below.
 | 776583.mp3  | Richard E. Webster           | //xeno-canto.org/776583 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 826168.mp3  | Richard E. Webster           | //xeno-canto.org/826168 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 872091.mp3  | Cristopher Rodríguez-Moreira | //xeno-canto.org/872091 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
-| 956549.mp3  | Ray Cooke                    | //xeno-canto.org/956549 | //creativecommons.org/licenses/by-nc-sa/4.0/ |
 | 971143.mp3  | Richard E. Webster           | //xeno-canto.org/971143 | //creativecommons.org/licenses/by-nc-sa/4.0/ |

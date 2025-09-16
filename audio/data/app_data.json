@@ -829,17 +829,6 @@
             "end_sec": 10.063492063492063
         },
         {
-            "recording_id": "956549",
-            "scientific_name": "Setophaga coronata",
-            "common_name": "Myrtle Warbler",
-            "author": "Ray Cooke",
-            "license": "//creativecommons.org/licenses/by-nc-sa/4.0/",
-            "url": "//xeno-canto.org/956549",
-            "file_name": "956549.mp3",
-            "start_sec": 12.144036281179138,
-            "end_sec": 18.14403628117914
-        },
-        {
             "recording_id": "475039",
             "scientific_name": "Setophaga coronata",
             "common_name": "Myrtle Warbler",
@@ -893,6 +882,17 @@
             "file_name": "466922.mp3",
             "start_sec": 82.5469387755102,
             "end_sec": 88.5469387755102
+        },
+        {
+            "recording_id": "509280",
+            "scientific_name": "Setophaga coronata",
+            "common_name": "Myrtle Warbler",
+            "author": "William Whitehead",
+            "license": "//creativecommons.org/licenses/by-nc-sa/4.0/",
+            "url": "//xeno-canto.org/509280",
+            "file_name": "509280.mp3",
+            "start_sec": 16.648707482993196,
+            "end_sec": 22.648707482993196
         }
     ],
     "Junco hyemalis": [

@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from pydub import AudioSegment
 from collections import defaultdict
@@ -85,11 +86,18 @@ def clip_mp3(input_path: str, output_path: str, start_sec: float, end_sec: float
 
 
 def validate_audio_file(path: Path, expected_seconds: float):
-    """Test that audio file has approximately the expected duration"""
+    """Test that audio file has approximately the expected duration and no excess clipping"""
     audio = AudioSegment.from_file(path)
     if abs(audio.duration_seconds - expected_seconds) > expected_seconds * .1:
         raise ValueError(
             f"Audio duration of {audio.duration_seconds} differs substantially from expected {expected_seconds}.")
+
+    samples = np.array(audio.get_array_of_samples())
+    max_val = float(2 ** (8 * audio.sample_width - 1) - 1)
+    samples = samples.astype(np.float32) / max_val
+    clipped_fraction = (np.abs(samples) > 0.999).mean()
+    if clipped_fraction > 0.01:
+        raise ValueError(f"Fraction of clips at maximum amplitude is {clipped_fraction}")
 
 
 def write_license_markdown(app_data: dict):
